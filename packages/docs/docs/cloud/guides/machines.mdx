@@ -1,5 +1,5 @@
 ---
-sidebar_position: 3
+sidebar_position: 4
 sidebar_label: Manage machines
 title: Manage machines
 sidebar_custom_props:
@@ -21,6 +21,8 @@ You can also log in without a machine and reserve one later with `sim-remote acq
 ## Hold more than one machine
 
 One user can hold several machines at the same time. `sim-remote list-machines` shows the machines that you hold and marks the current one. `sim-remote attach` points your session at another machine that you hold. A session started in a different client, for example the Argent agent, can share a machine in this way.
+
+To use several machines at the same time from one computer, run one session per machine. Set `SIM_REMOTE_SESSION` to a different name in each shell or agent before you run `sim-remote login`. See [Sessions and limits](/docs/cloud/reference/sessions#several-sessions-on-one-computer).
 
 ## Keep a machine during a long run
 
