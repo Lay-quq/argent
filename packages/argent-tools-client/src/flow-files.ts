@@ -28,6 +28,8 @@ import {
   e2eDirProject,
   e2eDirsFor,
   e2eRunFallbackDirs,
+  e2eShadowWarning,
+  pickE2eFile,
   collectFlowRequests,
   flowMemberKey,
   hasToolFileExtension,
@@ -41,6 +43,7 @@ import {
 import {
   readFileInputWire,
   uploadFile,
+  type FileInputSpec,
   type FileInputWire,
   type PrepareFileInputsOptions,
 } from "./file-inputs.js";
@@ -737,4 +740,30 @@ export async function collectStepMembers(
   }
   await collector.sendBaselines();
   return collector.members;
+}
+
+/**
+ * The args of an `e2e-execute` or `e2e-read-prerequisite` call by `name` for a
+ * tool-server that predates `.argent/e2e/`: its `flow_file` spec has no
+ * `paths`, so it reads only `.argent/flows/`. When the test is in
+ * `.argent/e2e/`, the call names it by `flow_path` instead, as `argent e2e run`
+ * does. Any other call is returned unchanged.
+ */
+export async function nameToE2ePathForOlderServer(
+  tool: string,
+  fileInputs: readonly FileInputSpec[] | undefined,
+  args: unknown,
+  log?: (line: string) => void
+): Promise<unknown> {
+  const id = canonicalToolId(tool);
+  if (id !== "e2e-execute" && id !== "e2e-read-prerequisite") return args;
+  const spec = fileInputs?.find((s) => s.target === "flow_file");
+  if (spec === undefined || spec.kind !== "file" || spec.paths?.length) return args;
+  const target = nestedFlowTarget(args);
+  if (target?.kind !== "name") return args;
+  const picked = await pickE2eFile(target.paths);
+  if (!picked.exists || picked.legacy) return args;
+  if (picked.shadowed !== undefined) log?.(e2eShadowWarning(picked.path, picked.shadowed));
+  const { name: _name, ...rest } = args as Record<string, unknown>;
+  return { ...rest, flow_path: picked.path };
 }

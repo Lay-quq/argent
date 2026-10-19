@@ -8,6 +8,7 @@ import { isFlagEnabled } from "@argent/configuration-core";
 import { randomUUID, createHash } from "node:crypto";
 import {
   FAILURE_CODES,
+  E2E_DIR_CLIENT_HEADER,
   LINKED_CALL_HEADER,
   describeParamIssues,
   getFailureSignal,
@@ -1004,6 +1005,11 @@ export function createHttpApp(registry: Registry, options?: HttpAppOptions): Htt
           // mark makes the recorder stricter for that caller and keeps its
           // recording in memory, sent back in client-file directives.
           ...(firstHeader(req.headers[LINKED_CALL_HEADER]) === "1" ? { linked: true } : {}),
+          // A client released before the rename writes client files only under
+          // `.argent/flows/`, so the recorder keeps its recordings there.
+          ...(firstHeader(req.headers[E2E_DIR_CLIENT_HEADER]) === "1"
+            ? {}
+            : { legacyE2eDir: true }),
           toolInvocationId,
           ...(recordChildInvocation ? { recordChildInvocation } : {}),
           ...(wantsStream

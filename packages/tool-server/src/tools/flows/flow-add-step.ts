@@ -24,7 +24,6 @@ import {
   parseFlow,
   assertSafeFlowName,
   describeSelector,
-  flowsDirFor,
   foldStepFromArgs,
   isLinkedRecorderCall,
   type FlowSavedTo,
@@ -52,6 +51,7 @@ import { nestedOrchestratorOutcome } from "./flow-nested-outcome";
 import {
   ClientProjectAccess,
   HostProjectAccess,
+  resolveRunTarget,
   resolveSavedTest,
   type ProjectAccess,
 } from "./project-access";
@@ -1001,7 +1001,11 @@ async function rewriteSiblingFlowPath(
       `project_root must be an absolute path (got ${typeof projectRoot === "string" ? `"${projectRoot}"` : "none"}) — a relative root would be resolved against the tool server's cwd, not the calling agent's`
     );
   }
-  if (path.resolve(flowsDirFor(projectRoot), `${stem}.yaml`) !== path.resolve(flowPath)) {
+  // A client older than the rename records into .argent/flows, so its sibling
+  // is a legacy candidate of `name`.
+  const candidates = e2eFileCandidates(projectRoot, stem);
+  const suppliedPath = path.resolve(flowPath);
+  if (!candidates.some((candidate) => path.resolve(candidate) === suppliedPath)) {
     throw invalid(`project_root "${projectRoot}" does not resolve "${stem}" to it`);
   }
 
@@ -1052,6 +1056,13 @@ async function rewriteSiblingFlowPath(
         `, so the recorded run: step would name an e2e test no case-sensitive checkout can find — ` +
         recovery
     );
+  }
+  // `name` reaches a legacy file only when no .argent/e2e copy shadows it.
+  if (path.resolve(candidates[0]) !== suppliedPath) {
+    const picked = await resolveSavedTest(project, candidates);
+    if (path.resolve(picked.path) !== suppliedPath) {
+      throw invalid(`project_root "${projectRoot}" resolves "${stem}" to "${picked.path}" instead`);
+    }
   }
 
   delete args.flow_path;
@@ -1151,7 +1162,7 @@ async function captureRunTarget(
     // word of the tool it dispatched. Only a case-folded verdict keeps the raw
     // step: a name matching nothing at all is an ordinary missing sibling, which
     // the read below reports far better than a casing complaint could.
-    const sibling = await project.resolveFlowFile(flowsDir, `${name}.yaml`);
+    const sibling = await resolveRunTarget(project, flowsDir, `${name}.yaml`);
     const spelling = sibling.spelling;
     if (spelling.state === "case_folded") {
       // Hint a name only when one can reach the file: an on-disk .YAML is
@@ -1172,7 +1183,11 @@ async function captureRunTarget(
     // Parsing validates the sibling exists and is a well-formed flow; a failure
     // falls through to keeping the raw step.
     const text = await sibling.read();
-    if (text === null) throw new Error(`ENOENT: no such file or directory, open '${fragPath}'`);
+    if (text === null) {
+      throw new Error(
+        `no ${name}.yaml beside the recording or in the project's other e2e test directory`
+      );
+    }
     parseFlow(text);
     // The sibling validated above is the file the runner will replay — but the
     // live sub-invoke that just ran resolved `name` through getFlowPath, the

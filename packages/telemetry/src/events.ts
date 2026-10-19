@@ -224,6 +224,7 @@ export interface DebuggerToolOutcomeProps {
 
 export interface CliRunFailProps extends FailureTelemetryProps {
   tool: string;
+  alias_used?: boolean;
   duration_ms: number;
 }
 

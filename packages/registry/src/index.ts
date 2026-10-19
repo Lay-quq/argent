@@ -1,5 +1,10 @@
 export { TypedEventEmitter } from "./event-emitter";
-export { LINKED_CALL_HEADER, ServiceState, isLiveServiceState } from "./types";
+export {
+  E2E_DIR_CLIENT_HEADER,
+  LINKED_CALL_HEADER,
+  ServiceState,
+  isLiveServiceState,
+} from "./types";
 export type {
   ServiceEvents,
   ServiceInstance,

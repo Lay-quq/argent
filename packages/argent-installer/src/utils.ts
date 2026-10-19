@@ -114,7 +114,7 @@ export function getGlobalSkillLockPath(): string {
 export const ARGENT_SKILL_PREFIX = "argent-";
 
 // Skills earlier argent versions shipped under names no longer bundled.
-// Update and uninstall remove them even when no lockfile tracks them.
+// Init, update and uninstall remove them even when no lockfile tracks them.
 export const LEGACY_ARGENT_SKILL_NAMES: readonly string[] = [
   "argent-create-flow",
   "argent-qa-flows",

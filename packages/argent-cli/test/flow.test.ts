@@ -1365,7 +1365,7 @@ describe("argent e2e run", () => {
     expect(logs.join("\n")).toBe("No e2e tests found in .argent/e2e or .argent/flows");
   });
 
-  it("lists both e2e test directories, marking legacy entries and shadowed names", async () => {
+  it("lists both e2e test directories as bare paths, with legacy and shadow notes on stderr", async () => {
     const listRoot = path.join(tempRoot, "list-both-dirs-project");
     const e2eDir = path.join(listRoot, ".argent", "e2e");
     const legacyDir = path.join(listRoot, ".argent", "flows");
@@ -1389,11 +1389,35 @@ describe("argent e2e run", () => {
     expect(logs.join("\n")).toBe(
       [
         ".argent/e2e/checkout.yaml",
-        ".argent/flows/checkout.yaml (legacy, shadowed by .argent/e2e/checkout.yaml)",
-        ".argent/flows/login.yaml (legacy)",
-        ".argent/flows/suite/checkout.yaml (legacy)",
+        ".argent/flows/checkout.yaml",
+        ".argent/flows/login.yaml",
+        ".argent/flows/suite/checkout.yaml",
       ].join("\n")
     );
+    expect(errs).toEqual([
+      "warning: .argent/flows/checkout.yaml is shadowed by .argent/e2e/checkout.yaml when run by name",
+      "note: 3 tests listed from .argent/flows (legacy); move them to .argent/e2e",
+    ]);
+  });
+
+  it("keeps list stdout to bare paths for a legacy-only project, so it pipes into xargs", async () => {
+    const listRoot = path.join(tempRoot, "list-legacy-only-project");
+    const legacyDir = path.join(listRoot, ".argent", "flows");
+    await fsp.mkdir(legacyDir, { recursive: true });
+    await fsp.writeFile(path.join(legacyDir, "a.yaml"), "steps: []\n");
+    const previousCwd = process.cwd();
+    try {
+      process.chdir(listRoot);
+      await flow(["list"], opts);
+    } finally {
+      process.chdir(previousCwd);
+    }
+
+    expect(logs).toEqual([".argent/flows/a.yaml"]);
+    expect(logs.join("\n")).not.toMatch(/[ ()]/);
+    expect(errs).toEqual([
+      "note: 1 test listed from .argent/flows (legacy); move it to .argent/e2e",
+    ]);
   });
 
   it("says neither e2e test directory exists", async () => {

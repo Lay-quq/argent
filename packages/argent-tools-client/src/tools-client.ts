@@ -1,6 +1,11 @@
 import * as path from "node:path";
 
-import { LINKED_CALL_HEADER, describeParamIssues } from "@argent/registry";
+import {
+  E2E_DIR_CLIENT_HEADER,
+  LINKED_CALL_HEADER,
+  canonicalToolId,
+  describeParamIssues,
+} from "@argent/registry";
 import { ensureToolsServer, type ToolsServerHandle, type ToolsServerPaths } from "./launcher.js";
 import { getResolvedToolsUrl } from "./link-config.js";
 import {
@@ -10,7 +15,12 @@ import {
   type FileInputSpec,
   type FileInputWire,
 } from "./file-inputs.js";
-import { collectFlowMembers, collectStepMembers, filesLogEnabled } from "./flow-files.js";
+import {
+  collectFlowMembers,
+  collectStepMembers,
+  filesLogEnabled,
+  nameToE2ePathForOlderServer,
+} from "./flow-files.js";
 import { ToolInvocationError } from "./errors.js";
 
 export interface ToolMeta {
@@ -218,6 +228,18 @@ export function errorBodyMessage(body: {
 }
 
 /**
+ * The tool `name` names: the one listed under it, else the one listed under
+ * its current or former id, so an `e2e-*` call reaches an older tool-server
+ * that lists only `flow-*`.
+ */
+function findTool(tools: readonly ToolMeta[], name: string): ToolMeta | null {
+  const id = canonicalToolId(name);
+  return (
+    tools.find((t) => t.name === name) ?? tools.find((t) => canonicalToolId(t.name) === id) ?? null
+  );
+}
+
+/**
  * Refuses a call that lacks a required argument, with the words the
  * tool-server uses for a missing argument. Over a link, file inputs travel
  * with the call, so a call the tool-server would refuse must not send them
@@ -337,8 +359,7 @@ export function createToolsClient(options: CreateToolsClientOptions = {}): Tools
     name: string,
     opts?: { signal?: AbortSignal }
   ): Promise<ToolMeta | null> {
-    const tools = await fetchTools(opts);
-    return tools.find((t) => t.name === name) ?? null;
+    return findTool(await fetchTools(opts), name);
   }
 
   async function callTool(
@@ -354,19 +375,23 @@ export function createToolsClient(options: CreateToolsClientOptions = {}): Tools
     // server can read them in place (local) or from inlined content (routed).
     let finalArgs = args;
     const tools = await fetchTools({ signal: opts?.signal });
-    const meta = tools.find((t) => t.name === name) ?? null;
+    const meta = findTool(tools, name);
+    // An older tool-server reads saved tests only from `.argent/flows/`.
+    if (meta) {
+      finalArgs = await nameToE2ePathForOlderServer(meta.name, meta.fileInputs, args, diagnose);
+    }
     // Where a baseline the result returns may be written (see file-inputs.ts).
     const baselineDirs: string[] = [];
     if (meta?.fileInputs?.length) {
-      if (remote) assertRequiredPresent(meta, args);
-      finalArgs = await prepareFileInputs(meta.fileInputs, args ?? {}, {
+      if (remote) assertRequiredPresent(meta, finalArgs);
+      finalArgs = await prepareFileInputs(meta.fileInputs, finalArgs ?? {}, {
         includeContent: remote,
         uploadEndpoint: remote ? { url, token } : undefined,
         log: diagnose,
         baselineDirs,
         collectMembers: collectFlowMembers,
         collectStepMembers,
-        toolFileInputs: (tool) => tools.find((t) => t.name === tool)?.fileInputs,
+        toolFileInputs: (tool) => findTool(tools, tool)?.fileInputs,
         signal: opts?.signal,
       });
     }
@@ -395,7 +420,7 @@ export function createToolsClient(options: CreateToolsClientOptions = {}): Tools
     const stream = opts?.onProgress !== undefined || carriesMembers(finalArgs);
     const sentOnce = carriesUpload(finalArgs);
     const res = await doFetch(
-      `${url}/tools/${encodeURIComponent(name)}`,
+      `${url}/tools/${encodeURIComponent(meta?.name ?? name)}`,
       {
         method: "POST",
         headers: {
@@ -403,6 +428,9 @@ export function createToolsClient(options: CreateToolsClientOptions = {}): Tools
           // Tells the tool-server the call came over a link, a link to
           // 127.0.0.1 included, which nothing else in the request shows.
           ...(remote ? { [LINKED_CALL_HEADER]: "1" } : {}),
+          // Tells the tool-server this client writes recordings under
+          // `.argent/e2e/`; an older client writes only `.argent/flows/`.
+          [E2E_DIR_CLIENT_HEADER]: "1",
           // A proxy that compresses the stream holds each line until its buffer
           // fills. `identity` keeps the stream uncompressed end to end.
           ...(stream ? { "Accept": "application/x-ndjson", "Accept-Encoding": "identity" } : {}),

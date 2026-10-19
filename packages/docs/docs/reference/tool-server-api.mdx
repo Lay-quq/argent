@@ -245,9 +245,13 @@ The `project_root` input of `e2e-add-step` has the kind `probe` and carries `"co
 | `command: e2e-execute` with a `flow_path` in `args`, in the directory of the recording | The members of the row above for the name of that file. Also that file, by the directory of the recording and the file name of `flow_path`                                                                                                       |
 | `command: e2e-execute` with another `flow_path`                                        | The recording file                                                                                                                                                                                                                               |
 
-The recording file is `<project_root>/.argent/e2e/<name>.yaml`, with the `project_root` and the `name` of the call. The [client policy](#client-policy) applies, with the recording file in place of the e2e test file.
+The recording file is `<project_root>/.argent/e2e/<name>.yaml`, with the `project_root` and the `name` of the call. A recording that the client keeps is in `<project_root>/.argent/flows/<name>.yaml` when the client does not send the [`x-argent-e2e-dir` header](#the-x-argent-e2e-dir-header). The [client policy](#client-policy) applies, with the recording file in place of the e2e test file.
 
 The run of a recorded `e2e-execute` step updates baselines only when the step sets `updateBaselines: true`. The result of `e2e-add-step` then has a `baselineWrites` list, as the result of a run. A step that reads no file sends an empty `members` list. The call is still a stream, as [The call](#the-call) describes. A call without a valid `name`, without an absolute `project_root`, or with `args` that are not the JSON text of an object also sends an empty list.
+
+## The `x-argent-e2e-dir` header
+
+The client sends the header `x-argent-e2e-dir: 1` with each `POST /tools/<name>` call. The header tells the tool-server that the client writes recording files in `.argent/e2e/`. A client that is older than the rename writes recording files only in `.argent/flows/`. For a call without the header, `e2e-start-recording` puts a recording that the client keeps in `<project_root>/.argent/flows/<name>.yaml`. A recording that the tool-server writes stays in `.argent/e2e/`.
 
 ## The `x-argent-linked` header
 

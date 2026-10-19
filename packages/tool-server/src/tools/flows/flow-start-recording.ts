@@ -3,6 +3,7 @@ import type { FileInputSpec, ToolDefinition } from "@argent/registry";
 import {
   countStepsOnDisk,
   getFlowPath,
+  getLegacyFlowPath,
   getRecordingSession,
   startRecordingSession,
   withFlowFileLock,
@@ -114,7 +115,6 @@ reports for those steps.`,
   fileInputs,
   services: () => ({}),
   async execute(_services, params, ctx) {
-    const filePath = getFlowPath(params.project_root, params.name);
     // The type emerges from the steps: a first `restart-app` becomes a leading
     // `launch` (flow-add-step) and makes it e2e; an executionPrerequisite
     // documents a fragment.
@@ -132,6 +132,13 @@ reports for those steps.`,
     // the caller shares this filesystem, so host persistence stands.
     const probe = ctx?.fileInputs?.project_root;
     const persist = ctx?.linked || (probe && !probe.presentOnHost) ? "client" : "host";
+    // A client released before the rename writes client files only under
+    // `.argent/flows/` and drops a directive for `.argent/e2e/` without an
+    // error, so its recording goes where it can save it.
+    const filePath =
+      persist === "client" && ctx?.legacyE2eDir
+        ? getLegacyFlowPath(params.project_root, params.name)
+        : getFlowPath(params.project_root, params.name);
 
     // Truncate-and-register is one critical section: under the flow-file lock a
     // step from the take being discarded can neither slip in between the reset

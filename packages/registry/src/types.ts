@@ -20,6 +20,14 @@ export enum ServiceState {
 export const LINKED_CALL_HEADER = "x-argent-linked";
 
 /**
+ * The request header the argent tools client sets to `1` on every call, to say
+ * it writes client files under `.argent/e2e/`. The tool-server reads its absence
+ * as {@link InvokeToolOptions.legacyE2eDir}. Remove one release after the rename,
+ * together with the CLI's `flow-execute` call.
+ */
+export const E2E_DIR_CLIENT_HEADER = "x-argent-e2e-dir";
+
+/**
  * True when a node holds (or is acquiring) a real process to tear down. ERROR
  * and TERMINATING nodes hold none — a start that threw (e.g. a tvOS UDID the
  * SimulatorServer blueprint rejects) leaves an ERROR node behind — so the stop
@@ -115,6 +123,12 @@ export interface InvokeToolOptions {
    * `ARGENT_TOOLS_URL`. Absent for a direct invocation and for a sub-tool call.
    */
   linked?: boolean;
+  /**
+   * True when an HTTP call lacks the header `x-argent-e2e-dir: 1`: the client
+   * predates the rename and writes client files only under `.argent/flows/`.
+   * Absent for a direct invocation and for a sub-tool call.
+   */
+  legacyE2eDir?: boolean;
   /**
    * Internal: the run-stack entries of the flow runs that enclose this call,
    * outermost first, which a sub-tool call passes on to a nested

@@ -1379,3 +1379,29 @@ describe("flow-execute with run: fragments sent through POST /upload", () => {
     expect(again.body.error).toMatch(/was not found on the tool-server/);
   });
 });
+
+describe("recording directory by client version over HTTP", () => {
+  // What a 0.29.0 client sends over a link: the linked mark, no e2e-dir mark.
+  const start = (id: string, name: string, headers: Record<string, string>) =>
+    supertest(handle.app)
+      .post(`/tools/${id}`)
+      .set(headers)
+      .send({ name, project_root: projectRoot });
+  const directivePath = (res: supertest.Response) =>
+    (res.body.data.savedTo as { path: string } | null)?.path;
+
+  it("records an old linked client's take into .argent/flows, which it can write", async () => {
+    const res = await start("flow-start-recording", "rec_old", { "x-argent-linked": "1" });
+    expect(res.status).toBe(200);
+    expect(directivePath(res)).toBe(path.join(projectRoot, ".argent", "flows", "rec_old.yaml"));
+  });
+
+  it("records a new linked client's take into .argent/e2e", async () => {
+    const res = await start("flow-start-recording", "rec_new", {
+      "x-argent-linked": "1",
+      "x-argent-e2e-dir": "1",
+    });
+    expect(res.status).toBe(200);
+    expect(directivePath(res)).toBe(path.join(projectRoot, ".argent", "e2e", "rec_new.yaml"));
+  });
+});

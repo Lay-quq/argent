@@ -486,6 +486,142 @@ describe("flow recording with a remote client (probe miss)", () => {
   });
 });
 
+describe("recording for a client released before the rename (legacyE2eDir)", () => {
+  const LEGACY_FLOW_PATH = path.join(CLIENT_ROOT, ".argent", "flows", "remote-flow.yaml");
+  // The 0.29.0 tools-client applies a client-file directive only to this shape
+  // and turns any other path into `savedTo: null` without an error.
+  const OLD_CLIENT_ACCEPTS = /\.argent[\\/]flows[\\/][^\\/]+\.yaml$/;
+
+  it("keeps a linked old client's recording in .argent/flows, the only dir it writes", async () => {
+    const ctx: ToolContext = { ...remoteCtx(), linked: true, legacyE2eDir: true };
+    const start = await flowStartRecordingTool.execute(
+      {},
+      { name: "remote-flow", project_root: CLIENT_ROOT, executionPrerequisite: "Home" },
+      ctx
+    );
+    expect(start.savedTo).toMatchObject({ [CLIENT_FILE_MARKER]: true, path: LEGACY_FLOW_PATH });
+    expect(LEGACY_FLOW_PATH).toMatch(OLD_CLIENT_ACCEPTS);
+
+    const echo = await flowInsertEchoTool.execute(
+      {},
+      { name: "remote-flow", project_root: CLIENT_ROOT, message: "label" }
+    );
+    expect((echo.savedTo as { path: string }).path).toBe(LEGACY_FLOW_PATH);
+
+    const finish = await flowFinishRecordingTool.execute(
+      {},
+      { name: "remote-flow", project_root: CLIENT_ROOT }
+    );
+    expect(finish.path).toBe(LEGACY_FLOW_PATH);
+    const savedTo = finish.savedTo as { path: string; content: string };
+    expect(savedTo.path).toBe(LEGACY_FLOW_PATH);
+    expect(parseFlow(savedTo.content).steps).toEqual([{ kind: "echo", message: "label" }]);
+    await expect(fs.stat(CLIENT_ROOT)).rejects.toThrow();
+  });
+
+  it("keeps a probe-miss old client's recording in .argent/flows too", async () => {
+    const start = await flowStartRecordingTool.execute(
+      {},
+      { name: "remote-flow", project_root: CLIENT_ROOT },
+      { ...remoteCtx(), legacyE2eDir: true }
+    );
+    expect((start.savedTo as { path: string }).path).toBe(LEGACY_FLOW_PATH);
+  });
+
+  it("still records into .argent/e2e on the host, where this server writes the file", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "legacy-host-"));
+    try {
+      const start = await flowStartRecordingTool.execute(
+        {},
+        { name: "host-flow", project_root: root },
+        { artifacts: new ArtifactStore(), legacyE2eDir: true }
+      );
+      const expected = path.join(root, ".argent", "e2e", "host-flow.yaml");
+      expect(start.savedTo).toBe(expected);
+      await expect(fs.stat(expected)).resolves.toBeTruthy();
+      await expect(fs.stat(path.join(root, ".argent", "flows"))).rejects.toThrow();
+    } finally {
+      await fs.rm(root, { recursive: true, force: true });
+    }
+  });
+
+  describe("nesting a sibling by flow_path in a legacy recording", () => {
+    const fragLegacy = path.join(CLIENT_ROOT, ".argent", "flows", "frag.yaml");
+    const fragE2e = path.join(CLIENT_ROOT, ".argent", "e2e", "frag.yaml");
+    const member = (spelled: string, text?: string): [string, ResolvedMember] => [
+      flowMemberKey(path.dirname(spelled), path.basename(spelled)),
+      text === undefined
+        ? { role: "flow", state: "missing", canonical: spelled, spelling: { state: "absent" } }
+        : {
+            role: "flow",
+            state: "present",
+            canonical: spelled,
+            spelling: { state: "listed" },
+            text,
+          },
+    ];
+
+    async function recordFlowPath(e2eCopy?: string) {
+      const registry = createMockRegistry({ "flow-execute": { result: { ok: true, steps: [] } } });
+      const addStep = createFlowAddStepTool(registry);
+      await flowStartRecordingTool.execute(
+        {},
+        { name: "remote-flow", project_root: CLIENT_ROOT, executionPrerequisite: "Home" },
+        { ...remoteCtx(), linked: true, legacyE2eDir: true }
+      );
+      const members = Object.fromEntries([
+        member(LEGACY_FLOW_PATH, "steps: []\n"),
+        member(fragLegacy, "steps:\n  - echo: legacy\n"),
+        member(fragE2e, e2eCopy),
+      ]);
+      const result = addStep.execute(
+        {},
+        {
+          name: "remote-flow",
+          project_root: CLIENT_ROOT,
+          command: "flow-execute",
+          args: JSON.stringify({ flow_path: fragLegacy, project_root: CLIENT_ROOT }),
+        },
+        {
+          artifacts: new ArtifactStore(),
+          linked: true,
+          legacyE2eDir: true,
+          fileInputs: {
+            project_root: {
+              clientPath: CLIENT_ROOT,
+              presentOnHost: false,
+              viaUpload: false,
+              members,
+            },
+          },
+        }
+      );
+      return { registry, result };
+    }
+
+    it("records run: for a fragment beside a recording in .argent/flows", async () => {
+      const { registry, result } = await recordFlowPath();
+      const directive = (await result).savedTo as { path: string; content: string };
+      expect(directive.path).toBe(LEGACY_FLOW_PATH);
+      expect(parseFlow(directive.content).steps).toEqual([{ kind: "run", flow: "frag.yaml" }]);
+      expect(registry.invokeTool).toHaveBeenCalledWith(
+        "flow-execute",
+        expect.objectContaining({
+          name: "frag",
+          project_root: CLIENT_ROOT,
+          flow_file: expect.objectContaining({ path: fragLegacy }),
+        })
+      );
+    });
+
+    it("refuses it when an .argent/e2e copy would run in its place", async () => {
+      const { registry, result } = await recordFlowPath("steps:\n  - echo: e2e\n");
+      await expect(result).rejects.toThrow(`resolves "frag" to "${fragE2e}" instead`);
+      expect(registry.invokeTool).not.toHaveBeenCalled();
+    });
+  });
+});
+
 describe("flow replay with a boundary-resolved flow_file", () => {
   it("flow-execute reads the resolved path instead of deriving from project_root", async () => {
     // Simulates the server-side temp file the boundary materialized from the

@@ -168,7 +168,7 @@ Subcommands:
                              or every test in a directory, and report pass/fail
                              (exit reflects result)
   list                       List runnable YAML paths in .argent/e2e and
-                             .argent/flows (legacy)
+                             .argent/flows (legacy); notes go to stderr
 
 Options (run):
   --device <id>          Device id to run against (auto-detected when omitted)
@@ -1472,9 +1472,12 @@ export async function e2e(argv: string[], options: FlowCommandOptions): Promise<
   }
 
   if (sub === "list") {
-    // Every e2e test directory in lookup order. A legacy entry is marked, and
-    // one whose name runs a file in an earlier directory says which.
+    // Every e2e test directory in lookup order. Stdout stays bare paths, one
+    // per line, so `list | xargs run` keeps working; notes on legacy and
+    // shadowed entries go to stderr.
     const lines: string[] = [];
+    const notes: string[] = [];
+    let legacyCount = 0;
     const byName = new Map<string, string>();
     let anyDir = false;
     for (const dir of E2E_DIRS) {
@@ -1494,14 +1497,25 @@ export async function e2e(argv: string[], options: FlowCommandOptions): Promise<
         const name = path.dirname(rel) === "." ? path.basename(rel, ".yaml") : undefined;
         const usedByName = name === undefined ? undefined : byName.get(name);
         if (name !== undefined && usedByName === undefined) byName.set(name, shown);
-        if (dir === E2E_DIR) lines.push(shown);
-        else lines.push(`${shown} (legacy${usedByName ? `, shadowed by ${usedByName}` : ""})`);
+        lines.push(shown);
+        if (dir === E2E_DIR) continue;
+        legacyCount++;
+        if (usedByName)
+          notes.push(`warning: ${shown} is shadowed by ${usedByName} when run by name`);
       }
+    }
+    if (legacyCount > 0) {
+      notes.push(
+        `note: ${legacyCount} test${legacyCount === 1 ? "" : "s"} listed from .argent/flows (legacy); move ${legacyCount === 1 ? "it" : "them"} to .argent/e2e`
+      );
     }
     if (!anyDir) {
       console.log(`No ${E2E_DIRS.join(" or ")} directory in the current working directory.`);
     } else if (lines.length === 0) console.log(`No e2e tests found in ${E2E_DIRS.join(" or ")}`);
-    else console.log(lines.join("\n"));
+    else {
+      console.log(lines.join("\n"));
+      for (const note of notes) console.error(note);
+    }
     return;
   }
 

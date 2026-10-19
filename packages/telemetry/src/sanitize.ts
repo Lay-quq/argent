@@ -262,6 +262,7 @@ export const ALLOWED: ValidatorMap = {
   },
   "cli:run_fail": {
     tool: TOOL_NAME,
+    alias_used: bool,
     duration_ms: DURATION_MS,
     ...FAILURE_SIGNAL,
   },

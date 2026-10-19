@@ -959,6 +959,26 @@ describe("Codex adapter", () => {
     expect(content).toContain('command = "argent"');
   });
 
+  it("remove drops approval tables for tool ids the current server no longer lists", () => {
+    // Uninstall runs remove() before removeAllowlist(); approvals written by an
+    // older release (e.g. 0.29.0 flow-* ids) must not survive it.
+    const configPath = path.join(tmpDir, "config.toml");
+    fs.writeFileSync(
+      configPath,
+      'model = "o3"\n\n[mcp_servers.other]\ncommand = "npx"\n\n' +
+        '[mcp_servers.argent]\ncommand = "argent"\nargs = ["mcp"]\n\n' +
+        '[mcp_servers.argent.tools.flow-execute]\napproval_mode = "approve"\n\n' +
+        '[mcp_servers.argent.tools.tool-a]\napproval_mode = "approve"\n'
+    );
+
+    expect(adapter.remove(configPath)).toBe(true);
+
+    const content = fs.readFileSync(configPath, "utf8");
+    expect(content).not.toContain("mcp_servers.argent");
+    expect(content).toContain('model = "o3"');
+    expect(content).toContain("[mcp_servers.other]");
+  });
+
   it("removeAllowlist is a no-op when no tools section exists", () => {
     const configPath = path.join(tmpDir, ".codex", "config.toml");
     adapter.write(configPath, getMcpEntry());

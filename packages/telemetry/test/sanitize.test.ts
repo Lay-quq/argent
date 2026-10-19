@@ -75,8 +75,8 @@ describe("sanitize", () => {
       expect(DEVICE_KINDS).toContain("device");
     });
 
-    it("keeps alias_used on the tool lifecycle events only as a boolean", () => {
-      for (const event of ["tool:invoke", "tool:complete", "tool:fail"] as const) {
+    it("keeps alias_used on the tool lifecycle events and cli:run_fail only as a boolean", () => {
+      for (const event of ["tool:invoke", "tool:complete", "tool:fail", "cli:run_fail"] as const) {
         expect(sanitize(event, { tool: "e2e-execute", alias_used: true })).toEqual({
           tool: "e2e-execute",
           alias_used: true,

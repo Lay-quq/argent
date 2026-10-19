@@ -25,7 +25,9 @@ import {
 } from "../../src/tools/flows/flow-run";
 import { flowStartRecordingTool } from "../../src/tools/flows/flow-start-recording";
 import { flowFinishRecordingTool } from "../../src/tools/flows/flow-finish-recording";
-import { __resetRecordingsForTesting } from "../../src/tools/flows/flow-utils";
+import { createFlowAddStepTool } from "../../src/tools/flows/flow-add-step";
+import { flowReadPrerequisiteTool } from "../../src/tools/flows/flow-read-prerequisite";
+import { __resetRecordingsForTesting, parseFlow } from "../../src/tools/flows/flow-utils";
 
 let root: string;
 
@@ -168,6 +170,22 @@ describe("a test addressed by name", () => {
     expect(notice.warning).toContain(`${legacy("frag.yaml")} is not used`);
   });
 
+  it("reads the .argent/e2e prerequisite and names the hidden test", async () => {
+    await write(e2e("dup.yaml"), "executionPrerequisite: From e2e\nsteps:\n  - echo: hi\n");
+    await write(legacy("dup.yaml"), "executionPrerequisite: From flows\nsteps:\n  - echo: hi\n");
+    await write(e2e("solo.yaml"), "executionPrerequisite: Solo\nsteps:\n  - echo: hi\n");
+
+    const read = (name: string) =>
+      flowReadPrerequisiteTool.execute({}, { name, project_root: root });
+
+    await expect(read("dup")).resolves.toEqual({
+      flow: "dup",
+      executionPrerequisite: "From e2e",
+      warning: `${legacy("dup.yaml")} is not used: ${e2e("dup.yaml")} has the same name and is read first.`,
+    });
+    await expect(read("solo")).resolves.toEqual({ flow: "solo", executionPrerequisite: "Solo" });
+  });
+
   it("reports a missing test at the .argent/e2e path", async () => {
     await expect(resolveFlowSource({ name: "nowhere", project_root: root })).resolves.toEqual({
       filePath: e2e("nowhere.yaml"),
@@ -220,6 +238,70 @@ describe("recording", () => {
     expect(finished.path).toBe(e2e("rec.yaml"));
     await expect(fs.readFile(e2e("rec.yaml"), "utf8")).resolves.toContain("steps: []");
     await expect(fs.readFile(legacy("rec.yaml"), "utf8")).resolves.toBe(echoes("legacy"));
+  });
+
+  /** Records "rec" with one nested e2e-execute of `frag`, the live call answering `result`. */
+  async function recordNested(result: unknown): Promise<{ message: string; yaml: string }> {
+    const registry = {
+      invokeTool: vi.fn(async () => result),
+      getTool: vi.fn(() => ({})),
+    } as unknown as Registry;
+    await flowStartRecordingTool.execute({}, { name: "rec", project_root: root });
+    const out = (await createFlowAddStepTool(registry).execute(
+      {},
+      {
+        name: "rec",
+        project_root: root,
+        command: "e2e-execute",
+        args: JSON.stringify({ name: "frag", project_root: root }),
+      }
+    )) as { message: string };
+    return { message: out.message, yaml: await fs.readFile(e2e("rec.yaml"), "utf8") };
+  }
+
+  const NOTICE = {
+    flow: "frag",
+    notice: "This e2e test has an execution prerequisite",
+    executionPrerequisite: "App open",
+  };
+
+  it.each([
+    ["ran", { ok: true, steps: [] }],
+    ["returned the prerequisite notice", NOTICE],
+  ])(
+    "records a nested fragment saved only in .argent/flows as run: (live call %s)",
+    async (_label, result) => {
+      await write(legacy("frag.yaml"), "executionPrerequisite: App open\nsteps:\n  - echo: hi\n");
+
+      const { message, yaml } = await recordNested(result);
+
+      expect(parseFlow(yaml).steps).toEqual([{ kind: "run", flow: "frag.yaml" }]);
+      expect(message).not.toContain("ENOENT");
+      expect(lines(await runColocated({ name: "rec" }))).toEqual(["run pass", "echo pass hi"]);
+    }
+  );
+
+  it("records run: for a fragment saved in both directories and replays the .argent/e2e copy", async () => {
+    await write(e2e("frag.yaml"), echoes("from e2e"));
+    await write(legacy("frag.yaml"), echoes("from flows"));
+
+    const { yaml } = await recordNested({ ok: true, steps: [] });
+
+    expect(parseFlow(yaml).steps).toEqual([{ kind: "run", flow: "frag.yaml" }]);
+    expect(lines(await runColocated({ name: "rec" }))).toEqual(["run pass", "echo pass from e2e"]);
+  });
+
+  it("keeps the raw step for a fragment saved in neither directory, without a made-up ENOENT", async () => {
+    const { message, yaml } = await recordNested({ ok: true, steps: [] });
+
+    expect(parseFlow(yaml).steps).toEqual([
+      expect.objectContaining({ kind: "tool", name: "e2e-execute" }),
+    ]);
+    expect(message).toContain(
+      'could not resolve "frag" as a sibling fragment (no frag.yaml beside the recording or in ' +
+        "the project's other e2e test directory); kept the raw e2e-execute step"
+    );
+    expect(message).not.toContain("ENOENT");
   });
 });
 

@@ -28,6 +28,8 @@ Earlier versions of Argent called this feature Argent flows. Argent still reads 
 
 :::
 
+<a id="recording-a-flow" />
+
 ## Recording an e2e test
 
 The agent records an e2e test while it operates the app. You describe the path in one instruction. The agent starts a recording, performs each step on the device and records the step. Each step runs live during the recording. Thus the agent sees the result of a step before the agent records the step.
@@ -39,6 +41,8 @@ When the agent has recorded the last step, the agent finishes the recording. Arg
 `argent link` and the `ARGENT_TOOLS_URL` variable send the tool calls of the agent to a tool-server. Both are a link. Over a link, Argent writes the e2e test file into the project on the computer of the agent. This is also true when the tool-server runs on the same computer, or when its computer has a directory at the same path.
 
 Argent makes a recorded tap portable. When the tapped element has a stable text or identifier, Argent records the element instead of the coordinates. During a replay, Argent finds the element on the screen again. When the element has no stable text or identifier, Argent records the coordinates and adds a warning.
+
+<a id="the-flow-file" />
 
 ## The e2e test file
 
@@ -58,6 +62,8 @@ An e2e test can contain more than taps and text. A step can wait for an element,
 Use a local script for setup or cleanup that device steps cannot do. Ask the agent to add the script at the required point in the e2e test.
 
 The file is plain text. You can commit the file, review the file in a pull request and edit a step by hand.
+
+<a id="replaying-a-flow" />
 
 ## Replaying an e2e test
 

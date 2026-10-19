@@ -1,6 +1,7 @@
 import * as p from "@clack/prompts";
 import pc from "picocolors";
 import { spawn } from "node:child_process";
+import * as os from "node:os";
 import { track } from "@argent/telemetry";
 import {
   SKILLS_DIR,
@@ -11,6 +12,7 @@ import {
   withNpmForce,
 } from "./utils.js";
 import { InitCancelled } from "./init-args.js";
+import { pruneLegacySkillDirs } from "./skills.js";
 import type { Scope } from "./init-scope.js";
 
 export type SkillsMethod = "default" | "interactive" | "manual";
@@ -129,6 +131,18 @@ export async function runSkillsStep(args: {
         spinner.stop("Skills installed.");
       }
       skillOutcome = "success";
+      // `skills add` never removes anything, so skills renamed since the last
+      // install would sit next to their new names. Interactive installs may
+      // have skipped the new names, so only the install-everything path prunes.
+      if (skillsMethod === "default") {
+        const removed = pruneLegacySkillDirs(
+          scope === "global" ? os.homedir() : (skillsCwd ?? process.cwd()),
+          scope === "global" ? "global" : "project"
+        );
+        if (removed.length > 0) {
+          p.log.info(pc.dim(`Removed legacy skills: ${removed.join(", ")}`));
+        }
+      }
     } catch (err) {
       if (skillsMethod === "default") {
         spinner.stop(pc.red("Skills installation failed."));

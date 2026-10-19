@@ -2,7 +2,13 @@ import * as path from "node:path";
 import * as fs from "node:fs/promises";
 import { constants as fsConstants } from "node:fs";
 import { MIN_SCRIPT_TIMEOUT_MS } from "@argent/configuration-core";
-import { E2E_DIRS, FAILURE_CODES, FailureError, e2eDirFor } from "@argent/registry";
+import {
+  E2E_DIRS,
+  FAILURE_CODES,
+  FailureError,
+  LEGACY_E2E_DIRS,
+  e2eDirFor,
+} from "@argent/registry";
 import { stringify as yamlStringify, parse as yamlParse } from "yaml";
 import {
   CLIENT_FILE_MARKER,
@@ -140,7 +146,19 @@ export function assertSafeFlowName(name: string): void {
  * file.
  */
 export function getFlowPath(projectRoot: string, name: string): string {
-  const flowsDir = getFlowsDir(projectRoot);
+  return flowPathIn(getFlowsDir(projectRoot), name);
+}
+
+/**
+ * The legacy recording file `<project_root>/.argent/flows/<name>.yaml`, for a
+ * client released before the rename, which writes client files only there.
+ */
+export function getLegacyFlowPath(projectRoot: string, name: string): string {
+  assertValidProjectRoot(projectRoot);
+  return flowPathIn(path.join(projectRoot, LEGACY_E2E_DIRS[0]), name);
+}
+
+function flowPathIn(flowsDir: string, name: string): string {
   assertSafeFlowName(name);
   const filePath = path.join(flowsDir, `${name}.yaml`);
   // Defense-in-depth, in case FLOW_NAME_PATTERN is ever weakened.
