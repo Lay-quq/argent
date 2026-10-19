@@ -1132,8 +1132,7 @@ const zedAdapter: McpConfigAdapter = {
     if (!fs.existsSync(settingsPath)) return;
     const config = readJsonc(settingsPath);
     const perms = (config.agent as Record<string, unknown>)?.tool_permissions as
-      | Record<string, unknown>
-      | undefined;
+      Record<string, unknown> | undefined;
     if (!perms || perms.default !== "allow") return;
     editJsoncFile(settingsPath, ["agent", "tool_permissions", "default"], "confirm");
   },

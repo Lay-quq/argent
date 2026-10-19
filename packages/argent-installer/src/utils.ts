@@ -279,8 +279,7 @@ export function readJsonc(filePath: string): Record<string, unknown> {
   if (raw.charCodeAt(0) === 0xfeff) raw = raw.slice(1);
   if (raw.trim() === "") return {};
   const parsed = parseJsonc(raw, [], { allowTrailingComma: true }) as
-    | Record<string, unknown>
-    | undefined;
+    Record<string, unknown> | undefined;
   return parsed ?? {};
 }
 

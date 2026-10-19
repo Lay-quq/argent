@@ -8,11 +8,7 @@ import {
 } from "./font-diff";
 
 export type TextChangeKind =
-  | "moved"
-  | "appeared"
-  | "disappeared"
-  | "content_changed"
-  | "font_changed";
+  "moved" | "appeared" | "disappeared" | "content_changed" | "font_changed";
 export type TextChangeSource = "ocr";
 export type TextAnalysisProvider = "ocr";
 export type TextReasonCode =

@@ -8,8 +8,7 @@ import {
 } from "@argent/tools-client";
 
 export type ContentBlock =
-  | { type: "text"; text: string }
-  | { type: "image"; data: string; mimeType: string };
+  { type: "text"; text: string } | { type: "image"; data: string; mimeType: string };
 
 /**
  * Context for resolving artifact handles. Omitted ⇒ rendering falls back to the

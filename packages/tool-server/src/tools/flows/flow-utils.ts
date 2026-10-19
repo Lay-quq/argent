@@ -1012,8 +1012,7 @@ type YamlIdleCondition = { idle: true; stableFor?: number; timeout?: number };
 
 /** `scroll-to` body: a bare target (scrolls down), or a map with options. */
 type YamlScrollBody =
-  | YamlSelector
-  | { target: YamlSelector; direction?: ScrollDirection; within?: YamlSelector };
+  YamlSelector | { target: YamlSelector; direction?: ScrollDirection; within?: YamlSelector };
 
 /**
  * A `when:` guard body: exactly one UI condition key (the await/assert shapes,
