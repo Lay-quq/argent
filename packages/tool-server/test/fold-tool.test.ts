@@ -144,8 +144,11 @@ describe("fold tool — input", () => {
     expect(foldTool.zodSchema!.safeParse({ udid: DUO, angle: 181 }).success).toBe(false);
   });
 
-  it("is a local-simulator tool only", () => {
-    expect(foldTool.capability).toEqual({ apple: { simulator: true } });
+  it("covers local simulators and Android emulators only", () => {
+    expect(foldTool.capability).toEqual({
+      apple: { simulator: true },
+      android: { emulator: true, unknown: true },
+    });
   });
 });
 
