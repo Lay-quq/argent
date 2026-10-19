@@ -33,7 +33,10 @@ Run `argent tools` to list them from the terminal, `argent tools describe <name>
 
 `launch-app` and `restart-app` accept `launchArgs`, a list of arguments that Argent passes to the app process at launch. For example, `["-FeatureFlag", "YES"]` overrides a UserDefaults value. `launchArgs` works on Apple simulators and physical iPhones. Other targets ignore it. If the app already runs, `launch-app` terminates it first, so that the app gets the arguments. On a physical iPhone, the app sees `--` before the arguments. UserDefaults overrides still apply.
 
-`terminate-app` is hidden from MCP; call it with the [Argent SDK](./node-client.mdx). It works on iOS and tvOS simulators, Android emulators and devices, and Vega Virtual Devices. On an iOS simulator it succeeds with `terminated: false` when the app is not running or not installed. Android and Vega always report `terminated: true`. Physical iPhones are not supported yet.
+`reinstall-app` uninstalls the app first, so Argent checks the app at `appPath` before the uninstall. The tool fails and keeps the installed app when one of these checks fails:
+
+- `appPath` does not exist, or it is not a `.app` directory (iOS), an `.apk` file (Android) or a `.vpkg` file (Vega).
+- `bundleId` does not match the bundle id in the `.app` or the package name in the `.apk`. On a remote simulator, Argent does not compare the bundle id.
 
 Argent drives a foldable iOS simulator, for example the iPhone Duo. `list-devices` marks it with `foldable: true`. `fold` moves the hinge to a posture (`closed`, `half-open` or `open`) or to an angle from 0 to 180 degrees.
 
@@ -59,8 +62,6 @@ Argent supports physical iPhones; physical iPads are not supported yet. `list-de
 | `ui-tree` (SDK only)        | Get the raw accessibility tree as nested JSON, iOS simulator and Android         |
 | `foreground-app` (SDK only) | Get the app in front, iOS simulator and Android                                  |
 
-`ui-tree` and `foreground-app` are hidden from MCP; call them with the [Argent SDK](./node-client.mdx), which exports their `UiTree` and `ForegroundApp` result types. Fields a platform cannot report yet are listed in `unsupportedFields`. A node is `hidden` when no part of it is on screen inside its ancestors. On iOS, while a system alert shows, `roots` holds the system app first and the app it covers second. On Android, `roots` holds one root per window, topmost first. A system dialog, such as a runtime permission prompt or a crash dialog, sets `alertVisible`, and every node of the app it covers is `covered`. When Android hides the app's window under the dialog, `foregroundApp` is unset. `foreground-app` returns the same `foregroundApp` and `alertVisible` without reading the tree, plus the app's `name` on iOS.
-
 ## Interacting
 
 | Tool                     | Description                                                     |
@@ -74,6 +75,7 @@ Argent supports physical iPhones; physical iPads are not supported yet. `list-de
 | `gesture-custom`         | Send an arbitrary sequence of touch events for complex gestures |
 | `keyboard`               | Type text or press special keys                                 |
 | `paste`                  | Put text on the device clipboard and paste it (sim/emu only)    |
+| `fill` (SDK only)        | Set the text of the focused text field                          |
 | `run-sequence`           | Execute several interaction steps in a single call              |
 | `screen-recording-start` | Start recording the screen to an h264 mp4                       |
 | `screen-recording-stop`  | Stop the recording and retrieve the video                       |
@@ -163,3 +165,11 @@ Staged through [Argent Lens](/docs/features/lens) so you can compare proposals a
 | `gather-workspace-data` | Fetch a structured snapshot of the app project's workspace |
 | `update-argent`         | Apply a pending Argent update                              |
 | `dismiss-update`        | Silence update reminders for a number of hours             |
+
+## Footnotes
+
+`terminate-app`, `ui-tree`, `foreground-app` and `fill` are hidden from MCP. Call them with the [Argent SDK](./node-client.mdx), which exports the `UiTree`, `ForegroundApp` and `FillResult` result types.
+
+`terminate-app` works on iOS and tvOS simulators, Android emulators and devices, and Vega Virtual Devices. On an iOS simulator it succeeds with `terminated: false` when the app is not running or not installed. Android and Vega always report `terminated: true`. Physical iPhones are not supported yet.
+
+In `ui-tree`, fields a platform cannot report yet are listed in `unsupportedFields`. A node is `hidden` when no part of it is on screen inside its ancestors. On iOS, while a system alert shows, `roots` holds the system app first and the app it covers second. On Android, `roots` holds one root per window, topmost first. A system dialog, such as a runtime permission prompt or a crash dialog, sets `alertVisible`, and every node of the app it covers is `covered`. When Android hides the app's window under the dialog, `foregroundApp` is unset. `foreground-app` returns the same `foregroundApp` and `alertVisible` without reading the tree, plus the app's `name` on iOS.

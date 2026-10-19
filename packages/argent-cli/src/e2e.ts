@@ -252,6 +252,10 @@ export function parseRunArgs(argv: string[]): {
     json: options.json === true,
     jsonStream: options["json-stream"] === true,
   };
+  // Their reads are truthy-guarded, so "" would be silently dropped.
+  for (const name of ["device", "platform", "output"] as const) {
+    if (options[name] === "") throw new FlagParseException(`--${name} requires a value`);
+  }
   if (positionals[0] !== undefined) out.flowRef = positionals[0];
   if (options.device !== undefined) out.device = options.device as string;
   if (options.platform !== undefined) out.platform = options.platform as string;

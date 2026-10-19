@@ -337,7 +337,7 @@ export async function uploadFile(
   const tarPath = path.join(tmpdir(), `argent-upload-${randomUUID()}.tar.gz`);
   trackArchive(tarPath);
   try {
-    await createTarGzFile(sourcePath, tarPath);
+    await createTarGzFile(await realpath(sourcePath), tarPath);
     const contentHash = await sha256File(tarPath);
     return { uploadId: await uploadTar(tarPath, endpoint, signal), contentHash };
   } finally {

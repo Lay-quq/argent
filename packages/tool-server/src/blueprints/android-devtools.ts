@@ -4,6 +4,7 @@ import {
   TypedEventEmitter,
   FAILURE_CODES,
   FailureError,
+  getFailureSignal,
   subprocessFailureMetadata,
   type DeviceInfo,
   type ServiceBlueprint,
@@ -58,11 +59,32 @@ export interface HierarchyResult {
   sdkInt?: number;
 }
 
+/** The `setText` RPC's answer. Never carries text: only whether it matched. */
+export interface SetTextResult {
+  /** False when no editable node that takes ACTION_SET_TEXT holds input focus. */
+  focused: boolean;
+  /** ACTION_SET_TEXT returned true. Absent for a check. */
+  performed?: boolean;
+  /** The node now holds the requested text (a password: as many characters). */
+  verified: boolean;
+  password?: boolean;
+  /** The text has a line break and the node holds one line. Nothing was changed. */
+  singleLine?: boolean;
+  /** The helper did not answer in time: the field may have changed. */
+  timedOut?: boolean;
+}
+
 export interface AndroidDevtoolsApi {
   isReady(): boolean;
   getHierarchy(options?: GetHierarchyOptions): Promise<HierarchyResult>;
   getScreenSize(): Promise<{ width: number; height: number; rotation: number }>;
   ping(): Promise<{ ok: boolean; idleMs: number; protocol: string }>;
+  /**
+   * Set the input-focused node's text ("" clears it) with ACTION_SET_TEXT,
+   * then read it back; with `check`, only read it back. Fails when the
+   * installed helper predates the RPC.
+   */
+  setText(text: string, options?: { check?: boolean }): Promise<SetTextResult>;
 }
 
 const READY_TIMEOUT_MS = 30_000;
@@ -482,6 +504,41 @@ export const androidDevtoolsBlueprint: ServiceBlueprint<AndroidDevtoolsApi, Devi
       },
       ping() {
         return client.request<{ ok: boolean; idleMs: number; protocol: string }>("ping");
+      },
+      async setText(text: string, setOpts: { check?: boolean } = {}) {
+        let result: Partial<SetTextResult>;
+        try {
+          result = await client.request<Partial<SetTextResult>>("setText", {
+            text,
+            ...(setOpts.check ? { check: true } : {}),
+          });
+        } catch (err) {
+          // A helper older than 3 answers the dispatcher's own rejection.
+          if (err instanceof Error && err.message.includes("Unknown method: setText")) {
+            throw new FailureError("The devtools helper predates `setText`; update argent", {
+              error_code: FAILURE_CODES.ANDROID_DEVTOOLS_RPC_ERROR,
+              failure_stage: "android_devtools_set_text",
+              failure_area: "tool_server",
+              error_kind: "unknown",
+            });
+          }
+          // The RPC or the helper's worker ran out of time; the action may
+          // still have landed.
+          if (
+            getFailureSignal(err)?.error_code === FAILURE_CODES.ANDROID_DEVTOOLS_RPC_TIMEOUT ||
+            (err instanceof Error && err.message.includes("Helper worker timed out"))
+          ) {
+            return { focused: true, verified: false, timedOut: true };
+          }
+          throw err;
+        }
+        return {
+          focused: result.focused === true,
+          verified: result.verified === true,
+          ...(typeof result.performed === "boolean" ? { performed: result.performed } : {}),
+          ...(typeof result.password === "boolean" ? { password: result.password } : {}),
+          ...(result.singleLine === true ? { singleLine: true } : {}),
+        };
       },
     };
 

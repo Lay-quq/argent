@@ -42,7 +42,7 @@ With two or more devices on one Metro, `debugger-connect` refuses a udid/serial 
 
 | Tool                    | Purpose                                                                                       |
 | ----------------------- | --------------------------------------------------------------------------------------------- |
-| `debugger-reload-metro` | Reload all connected apps (like pressing "r" in Metro terminal). Needs a CDP target.          |
+| `debugger-reload-metro` | Reload the `device_id` app (all apps on the port when `method: "http"`). Needs a CDP target.  |
 | `restart-app`           | Terminate and relaunch the app by device id and bundleId. Use when app lost Metro connection. |
 
 ### Inspection & console
